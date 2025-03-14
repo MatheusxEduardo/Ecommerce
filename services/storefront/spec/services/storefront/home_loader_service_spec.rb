@@ -1,7 +1,12 @@
 require "rails_helper"
 
 describe Storefront::HomeLoaderService do
-  context "when #call" do
+  before do
+    5.times { create(:game, release_date: 2.days.ago) }
+    5.times { create(:product, productable: create(:game, release_date: 2.days.ago), featured: true, status: :available, price: rand(1..10.0)) }
+  end
+
+  describe "#call" do
     let!(:unavailable_products) do
       products = []
       5.times do
@@ -10,8 +15,8 @@ describe Storefront::HomeLoaderService do
       end
       products
     end
-    
-    context "on featured procucts" do
+
+    context "on featured products" do
       let!(:non_featured_products) { create_list(:product, 5, featured: false) }
       let!(:featured_products) { create_list(:product, 5) }
 
@@ -24,19 +29,17 @@ describe Storefront::HomeLoaderService do
       it "returns random featured available products" do
         service = described_class.new
         service.call
-        expect(service.featured).to satisfy do |expected_products| 
-          expected_products & featured_products == expected_products
-        end 
+        expect(service.featured).to all(satisfy { |p| p.featured? && p.status == "available" })
       end
 
       it "does not return unavailable or non-featured products" do
         service = described_class.new
         service.call
-        expect(service.featured).to_not include(unavailable_products, non_featured_products)
+        expect(service.featured).to_not include(*unavailable_products, *non_featured_products)
       end
     end
 
-    context "on recently released procucts" do
+    context "on recently released products" do
       let!(:non_last_release_products) do
         products = []
         5.times do
@@ -64,19 +67,17 @@ describe Storefront::HomeLoaderService do
       it "returns random last released available products" do
         service = described_class.new
         service.call
-        expect(service.last_releases).to satisfy do |expected_products| 
-          expected_products & last_release_products == expected_products
-        end 
+        expect(service.last_releases).to all(satisfy { |p| p.productable.release_date >= 7.days.ago && p.status == "available" })
       end
 
       it "does not return non-last released or unavailable products" do
         service = described_class.new
         service.call
-        expect(service.last_releases).to_not include(unavailable_products, non_last_release_products)
+        expect(service.last_releases).to_not include(*unavailable_products, *non_last_release_products)
       end
     end
 
-    context "on cheapest procucts" do
+    context "on cheapest products" do
       let!(:non_cheapest) { create_list(:product, 5, price: 110.00) }
       let!(:cheapest_products) { create_list(:product, 5, price: 5.00) }
 
@@ -89,15 +90,13 @@ describe Storefront::HomeLoaderService do
       it "returns cheapest available products" do
         service = described_class.new
         service.call
-        expect(service.cheapest).to satisfy do |expected_products| 
-          expected_products & cheapest_products == expected_products
-        end 
+        expect(service.cheapest).to all(satisfy { |p| p.price <= 10.0 && p.status == "available" })
       end
 
-      it "returns non-cheapest or unavailable products" do
+      it "does not return non-cheapest or unavailable products" do
         service = described_class.new
         service.call
-        expect(service.cheapest).to_not include(unavailable_products, non_cheapest)
+        expect(service.cheapest).to_not include(*unavailable_products, *non_cheapest)
       end
     end
   end
